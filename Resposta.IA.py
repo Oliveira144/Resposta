@@ -1,6 +1,6 @@
 import streamlit as st
 
-st.title("🎯 FS Pro - Histórico Correto")
+st.title("🎯 FS Pro - FINAL")
 
 if 'h' not in st.session_state:
     st.session_state.h = []
@@ -9,126 +9,120 @@ if 'h' not in st.session_state:
 bank = st.number_input("💰 Bankroll", min_value=10)
 
 # BOTÕES
-c1,c2,c3 = st.columns(3)
-if c1.button("🔴 BANK", use_container_width=True): 
-    st.session_state.h.append('🔴')
-    st.rerun()
-if c2.button("🔵 PLAYER", use_container_width=True):
-    st.session_state.h.append('🔵')
-    st.rerun()
-if c3.button("🟡 TIE", use_container_width=True):
-    st.session_state.h.append('🟡')
-    st.rerun()
+c1,c2,c3=st.columns(3)
+if c1.button("🔴 BANK"): st.session_state.h.append('🔴');st.rerun()
+if c2.button("🔵 PLAYER"): st.session_state.h.append('🔵');st.rerun()
+if c3.button("🟡 TIE"): st.session_state.h.append('🟡');st.rerun()
 
-# HISTÓRICO CORRIGIDO: RECENTE ←—————→ ANTIGO
-h_display = st.session_state.h[-12:][::-1]  # REVERSE: novo ESQUERDA
+# HISTÓRICO: RECENTE ESQUERDA ← ANTIGO DIREITA
+h_display = st.session_state.h[-12:][::-1]
 if h_display:
-    st.markdown("### 📊 **HISTÓRICO** ← RECENTE     ANTIGO →")
-    st.markdown("**`" + "     ".join(h_display) + "`**")
-    
-    # STATS
-    h = st.session_state.h[-12:]
-    col1,col2,col3=st.columns(3)
-    col1.metric("🔴", h.count('🔴'))
-    col2.metric("🔵", h.count('🔵'))
-    col3.metric("🟡", h.count('🟡'))
+    st.markdown("### 📊 **HISTÓRICO** ←**RECENTE**          **ANTIGO**→")
+    st.markdown("`" + "     ".join(h_display) + "`")
 
-# ANÁLISE PADRÕES (histórico original ordem)
-def analyze_patterns(hist):
-    n = len(hist)
-    if n < 3: return {}
+# ANÁLISE
+def analyze(h):
+    n=len(h)
+    if n<3: return {'streak':1, 'choppy':0, 'cockroach':False}
     
-    # BIG ROAD (último streak)
-    streak=1; c=hist[-1]
-    for i in range(1, min(10,n)):
-        if hist[-i-1]==c: streak+=1
+    # STREAK
+    streak=1; c=h[-1]
+    for i in range(1,min(10,n)):
+        if h[-i-1]==c: streak+=1
         else: break
     
     # CHOPPY
     chop=0
     for i in range(1,min(7,n)):
-        if hist[-i]!=hist[-i-1]: chop+=1
+        if h[-i]!=h[-i-1]: chop+=1
     
     # COCKROACH
-    cockroach = (n>=3 and hist[-3:]==['🔴','🔴','🔵']) or (n>=3 and hist[-3:]==['🔵','🔵','🔴'])
+    cockroach = (n>=3 and h[-3:]==['🔴','🔴','🔵']) or (n>=3 and h[-3:]==['🔵','🔵','🔴'])
     
-    return {
-        'streak': streak,
-        'color': c,
-        'choppy': chop,
-        'cockroach': cockroach
-    }
+    return {'streak':streak, 'choppy':chop, 'cockroach':cockroach, 'color':c}
 
-# === SUGESTÃO GIGANTE CLARA ===
+# EXECUTA
 st.markdown("---")
 st.markdown("### 🚀 **SUGESTÃO PRINCIPAL**")
 
 h = st.session_state.h
-if len(h) < 3:
-    st.info("🔄 **3+ rodadas** para padrões precisos")
-elif len(h) >= 3:
-    analysis = analyze_patterns(h)
+if len(h)<3:
+    st.info("🔄 **3+ rodadas** p/ padrões")
+else:
+    analysis = analyze(h)
     
-    # PRIORIDADE PADRÕES
     if analysis['streak'] >= 6:
-        contra = "🔵
+        contra_emoji = "🔵" if analysis['color']=="🔴" else "🔴"
+        contra_side = "PLAYER" if analysis['color']=="🔴" else "BANK"
+        st.error(f"""
+## 🔥 **DRAGON 6+**
+{contra_emoji}
 
-**PLAYER**
+**{contra_side}**
 
-R$"+str(int(bank*0.02))
-        st.error(f"## 🔥 **DRAGON RECOVERY**
-
-{contra}")
+**R${int(bank*0.02)}**
+        """)
     elif analysis['streak'] >= 4:
-        contra = "🔵
+        contra_emoji = "🔵" if analysis['color']=="🔴" else "🔴"
+        contra_side = "PLAYER" if analysis['color']=="🔴" else "BANK"
+        st.warning(f"""
+## ⚡ **BIG ROAD 4+**
+{contra_emoji}
 
-**PLAYER**
+**{contra_side}**
 
-R$"+str(int(bank*0.01))
-        st.warning(f"## ⚡ **BIG ROAD 4+**
-
-{contra}")
+**R${int(bank*0.01)}**
+        """)
     elif analysis['cockroach']:
-        st.info("## 🐛 **COCKROACH**
-
+        st.info("""
+## 🐛 **COCKROACH**
 🔴
 
 **BANK**
 
-R$"+str(int(bank*0.008)))
+**R${int(bank*0.008)}**
+        """)
     elif analysis['choppy'] >= 5:
-        next_bet = "🔵 PLAYER" if analysis['color']=="🔴" else "🔴 BANK"
-        amt = str(int(bank*0.005))
-        st.info(f"## 🔄 **CHOPPY**
+        next_emoji = "🔵" if analysis['color']=="🔴" else "🔴"
+        next_side = "PLAYER" if analysis['color']=="🔴" else "BANK"
+        st.info(f"""
+## 🔄 **CHOPPY**
+{next_emoji}
 
-{next_bet}
+**{next_side}**
 
-**R${amt}**")
+**R${int(bank*0.005)}**
+        """)
     else:
-        contra = "🔵 PLAYER" if analysis['color']=="🔴" else "🔴 BANK"
-        st.success(f"## ✅ **FLAT BET**
+        contra_emoji = "🔵" if analysis['color']=="🔴" else "🔴"
+        contra_side = "PLAYER" if analysis['color']=="🔴" else "BANK"
+        st.success(f"""
+## ✅ **NORMAL**
+{contra_emoji}
 
-{contra}
+**{contra_side}**
 
-R${int(bank*0.003)}")
+**R${int(bank*0.003)}**
+        """)
 
-# PADRÕES DETALHADOS
-if len(h) >= 4:
-    st.markdown("### 🔍 **PADRÕES ATIVOS**")
-    analysis = analyze_patterns(h)
+# METRICS
+if h:
+    col1,col2,col3=st.columns(3)
+    col1.metric("🔴",h[-12:].count('🔴'))
+    col2.metric("🔵",h[-12:].count('🔵'))
+    col2.metric("🟡",h[-12:].count('🟡'))
+
+# PADRÕES
+if len(h)>=4:
+    st.markdown("### 🔍 **Padrões**")
+    analysis=analyze(h)
+    pats=[]
+    if analysis['streak']>=4: pats.append(f"Big Road x{analysis['streak']}")
+    if analysis['choppy']>=5: pats.append(f"Choppy x{analysis['choppy']}")
+    if analysis['cockroach']: pats.append("Cockroach")
     
-    pats = []
-    if analysis['streak']>=4: pats.append(f"🔥 Big Road x{analysis['streak']}")
-    if analysis['choppy']>=5: pats.append(f"🔄 Choppy x{analysis['choppy']}")
-    if analysis['cockroach']: pats.append("🐛 Cockroach")
-    if analysis['streak']>=6: pats.append("🐲 Dragon")
-    
-    for p in pats:
-        st.caption(f"• **{p}**")
+    for p in pats: st.caption(f"• {p}")
 
-# CLEAR
-if st.button("🗑️ Clear", type="secondary"):
-    st.session_state.h = []
-    st.rerun()
+if st.button("🗑️ Clear"): st.session_state.h=[];st.rerun()
 
-st.caption("**← RECENTE ESQUERDA** | Sugestão **HUGE** por padrões")
+st.caption("**← RECENTE ESQUERDA** | **Syntax 100%** | Padrões → Sugestão")
