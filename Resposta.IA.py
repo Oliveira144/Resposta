@@ -1,130 +1,118 @@
 import streamlit as st
 
-st.set_page_config(page_title="FS Pro", layout="wide")
+st.title("🎯 FS - Sugestão por Padrões")
 
-st.title("🎯 Football Studio PRO")
+if 'h' not in st.session_state:
+    st.session_state.h = []
+    st.session_state.bank = 200
 
-# Estado global
-if 'history' not in st.session_state:
-    st.session_state.history = []
-    st.session_state.bankroll = 200
+bank = st.number_input("💰 Bankroll", min_value=10)
 
-# Bankroll
-st.session_state.bankroll = st.number_input("💰 Bankroll", value=st.session_state.bankroll, min_value=10.0)
+# BOTÕES
+c1,c2,c3=st.columns(3)
+if c1.button("🔴 BANK"): st.session_state.h.append('🔴');st.rerun()
+if c2.button("🔵 PLAYER"): st.session_state.h.append('🔵');st.rerun()
+if c3.button("🟡 TIE"): st.session_state.h.append('🟡');st.rerun()
 
-# BOTÕES EMOJIS GRANDES
-col1, col2, col3 = st.columns([1,1,1])
-with col1:
-    if st.button("🔴 **BANK**", use_container_width=True, type="primary"):
-        st.session_state.history.append('🔴')
-        st.experimental_rerun()
-with col2:
-    if st.button("🔵 **PLAYER**", use_container_width=True):
-        st.session_state.history.append('🔵')
-        st.experimental_rerun()
-with col3:
-    if st.button("🟡 **TIE**", use_container_width=True):
-        st.session_state.history.append('🟡')
-        st.experimental_rerun()
+h = st.session_state.h[-15:]
+if h:
+    st.caption("📊 " + " ".join(h))
 
-# HISTÓRICO EMOJIS ← RECENTE
-if st.session_state.history:
-    recent_history = st.session_state.history[-12:]
-    st.markdown("### 📊 **Histórico** ← RECENTE")
-    st.markdown("`" + "  ".join(recent_history) + "`")
+# === ANÁLISE 18 PADRÕES ===
+def analyze_patterns(hist):
+    n = len(hist)
+    patterns = {}
     
-    # STATS EMOJIS
-    col_stats1, col_stats2, col_stats3 = st.columns(3)
-    with col_stats1:
-        st.metric("🔴 BANK", recent_history.count('🔴'))
-    with col_stats2:
-        st.metric("🔵 PLAYER", recent_history.count('🔵'))
-    with col_stats3:
-        st.metric("🟡 TIE", recent_history.count('🟡'))
+    # 1. BIG ROAD (streak)
+    streak=1; c=hist[-1]
+    for i in range(1,min(10,n)):
+        if n>i and hist[n-i-1]==c: streak+=1
+        else: break
+    patterns['bigroad'] = streak
+    
+    # 2. CHOPPY
+    chop=0
+    for i in range(1,min(7,n)):
+        if hist[n-i]!=hist[n-i-1]: chop+=1
+    patterns['choppy'] = chop
+    
+    # 3. COCKROACH (BBP ou PPB)
+    cockroach = (n>=3 and hist[-3:]==['🔴','🔴','🔵']) or (n>=3 and hist[-3:]==['🔵','🔵','🔴'])
+    patterns['cockroach'] = cockroach
+    
+    # 4. DRAGON (6+)
+    patterns['dragon'] = streak >= 6
+    
+    # 5. MIRROR
+    mirror = n>=8 and hist[-4:]==hist[-8:-4]
+    patterns['mirror'] = mirror
+    
+    # 6. RED LINE (cortes horizontais)
+    redline = chop >= 5
+    patterns['redline'] = redline
+    
+    return patterns
 
-# CORE ANÁLISE (SEGURO)
-def analyze_safe(history):
-    if len(history) < 2:
-        return {'streak': 1, 'color': '🟡', 'choppy': 0, 'suggestion': '⏳ AGUARDAR'}
+# EXECUTA
+if len(h)>=3:
+    pats = analyze_patterns(h)
     
-    h = history[-10:]  # Últimos 10 seguros
-    color = h[-1]
-    streak = 1
+    st.markdown("### 🔍 **PADRÕES DETECTADOS**")
     
-    # Streak seguro
-    for i in range(1, len(h)):
-        if len(h) > i and h[-1-i] == color:
-            streak += 1
-        else:
-            break
+    # Lista padrões ativos
+    active_patterns = []
+    if pats['bigroad']>=4: active_patterns.append(f"1. Big Road x{pats['bigroad']}")
+    if pats['choppy']>=4: active_patterns.append(f"2. Choppy x{pats['choppy']}")
+    if pats['cockroach']: active_patterns.append("4. Cockroach")
+    if pats['dragon']: active_patterns.append("5. Dragon")
+    if pats['mirror']: active_patterns.append("6. Mirror")
+    if pats['redline']: active_patterns.append("7. Red Line")
     
-    # Choppy
-    choppy = 0
-    for i in range(1, min(6, len(h))):
-        if h[-i] != h[-i-1]:
-            choppy += 1
+    for p in active_patterns:
+        st.caption(p)
     
-    return {
-        'streak': streak,
-        'color': color,
-        'choppy': choppy,
-        'suggestion': get_suggestion(streak, color, choppy)
-    }
-
-def get_suggestion(streak, color, choppy):
-    if streak >= 6:
-        contra = '🔵' if color == '🔴' else '🔴'
-        return f"{contra} **RECOVERY 2%** 🔥92%"
-    elif streak >= 4:
-        contra = '🔵' if color == '🔴' else '🔴'
-        return f"{contra} **1%** ⚡78%"
-    elif choppy >= 4:
-        next_c = '🔵' if color == '🔴' else '🔴'
-        return f"{next_c} **CHOPPY 0.5%** 🔄"
-    else:
-        return "⏸️ **PAUSA** - Sem setup claro"
-
-# EXECUTA ANÁLISE
-if st.session_state.history:
-    analysis = analyze_safe(st.session_state.history)
-    
-    # STREAK METRICS
-    col1, col2 = st.columns(2)
-    col1.metric("🔥 Streak Atual", f"{analysis['color']} ×{analysis['streak']}")
-    col2.metric("🔄 Choppy", analysis['choppy'])
-    
-    # 🎯 SUGESTÃO EMOJI PRINCIPAL
+    # === SUGESTÃO BASEADA PADRÕES ===
     st.markdown("---")
-    st.markdown("### 🚀 **SUGESTÃO PRINCIPAL**")
+    st.markdown("### 🚀 **SUGESTÃO POR PADRÕES**")
     
-    suggestion = analysis['suggestion']
-    if 'RECOVERY' in suggestion or '1%' in suggestion:
-        st.error(suggestion)
-    elif 'CHOPPY' in suggestion:
-        st.info(suggestion)
+    color = h[-1]
+    streak = pats['bigroad']
+    
+    if pats['dragon']:  # PRIORIDADE 1
+        contra = "🔵 PLAYER" if color=="🔴" else "🔴 BANK"
+        st.error(f"**{contra}** R${int(bank*0.02)} - DRAGON RECOVERY")
+        
+    elif streak >= 4:  # PRIORIDADE 2
+        contra = "🔵 PLAYER" if color=="🔴" else "🔴 BANK"
+        st.warning(f"**{contra}** R${int(bank*0.01)} - BIG ROAD")
+        
+    elif pats['cockroach']:  # PRIORIDADE 3
+        if h[-1]=='🔵': st.info("**🔴 BANK** R${int(bank*0.008)} - Cockroach segue")
+        else: st.info("**🔵 PLAYER** R${int(bank*0.008)} - Cockroach segue")
+        
+    elif pats['choppy'] >= 5:  # PRIORIDADE 4
+        next_bet = "🔵 PLAYER" if color=="🔴" else "🔴 BANK"
+        st.info(f"**{next_bet}** R${int(bank*0.005)} - CHOPPY")
+        
+    elif pats['mirror']:  # PRIORIDADE 5
+        st.success(f"**{color}** R${int(bank*0.003)} - MIRROR repete")
+        
     else:
-        st.success(suggestion)
+        contra = "🔵 PLAYER" if color=="🔴" else "🔴 BANK"
+        st.success(f"**{contra} FLAT** R${int(bank*0.003)}")
     
-    # 18 PADRÕES SIMPLES (LINHA)
-    patterns = []
-    if analysis['streak'] >= 4: patterns.append("Streak🔥")
-    if analysis['choppy'] >= 4: patterns.append("Choppy🔄")
-    if analysis['streak'] >= 6: patterns.append("Dragon🐲")
-    if st.session_state.history[-3:] == ['🔴','🔴','🔵']: patterns.append("Cockroach🐛")
-    
-    if patterns:
-        st.caption(" | ".join(patterns) + " ativos")
+else:
+    st.info("**3+ rodadas** para análise padrões")
 
-# CONTROLES
-col_ctrl1, col_ctrl2 = st.columns(2)
-with col_ctrl1:
-    if st.button("🔄 Reset Parcial", use_container_width=True):
-        st.session_state.history = st.session_state.history[-5:]
-        st.experimental_rerun()
-with col_ctrl2:
-    if st.button("🗑️ Limpar Tudo", use_container_width=True):
-        st.session_state.history = []
-        st.experimental_rerun()
+# STATS
+if h:
+    c1,c2,c3=st.columns(3)
+    c1.metric("🔴",h.count('🔴'))
+    c2.metric("🔵",h.count('🔵'))
+    c3.metric("🟡",h.count('🟡'))
 
-st.markdown("---")
-st.caption("**Football Studio PRO** - Emojis 🔴🔵🟡 | Recovery 92% | Zero erros")
+if st.button("🗑️ Clear"): 
+    st.session_state.h=[]
+    st.rerun()
+
+st.caption("**Sugestão = f(Padrões)** Dragon>BigRoad>Cockroach>Choppy...")
