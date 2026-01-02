@@ -1,74 +1,51 @@
 import streamlit as st
 
-st.title("Football Studio PRO")
+st.title("FS Live")
 
-if 'history' not in st.session_state:
-    st.session_state.history = []
+if 'h' not in st.session_state:
+    st.session_state.h = []
 
-bankroll = st.number_input("Bankroll R$", 500)
+bankroll = st.number_input("R$", 1000)
 
 # BOTÕES
-col1, col2, col3 = st.columns(3)
-if col1.button("🔴 BANK", use_container_width=True):
-    st.session_state.history.append('B')
-    st.rerun()
-if col2.button("🔵 PLAYER", use_container_width=True):
-    st.session_state.history.append('P')
-    st.rerun()
-if col3.button("🟡 TIE", use_container_width=True):
-    st.session_state.history.append('T')
-    st.rerun()
+c1, c2, c3 = st.columns(3)
+if c1.button("🔴 BANK"):
+    st.session_state.h.append('B')
+if c2.button("🔵 PLAYER"):
+    st.session_state.h.append('P')
+if c3.button("🟡 TIE"):
+    st.session_state.h.append('T')
 
-if st.button("Clear", type="secondary"):
-    st.session_state.history = []
-    st.rerun()
+if st.button("Clear"):
+    st.session_state.h = []
 
-history = st.session_state.history[-12:]
+h = st.session_state.h[-10:]
 
-# HISTORICO HORIZONTAL MAIS RECENTE ← ANTIGO
-if history:
-    st.subheader("Histórico")
-    hist_emojis = []
-    for res in reversed(history):  # Reverte: recente primeiro
-        if res == 'B':
-            hist_emojis.append('🔴')
-        elif res == 'P':
-            hist_emojis.append('🔵')
+# SUGESTÃO DIRETA TOPO
+if len(h) >= 3:
+    s = 1
+    c = h[-1]
+    for o in reversed(h[-5:]):
+        if o == c:
+            s += 1
         else:
-            hist_emojis.append('🟡')
+            break
     
-    # 1 LINHA HORIZONTAL
-    st.markdown("**" + " ".join(hist_emojis) + "**")
-    
-    # STREAK (sempre visível)
-    if len(history) >= 3:
-        streak = 1
-        current = history[-1]
-        for o in reversed(history[-6:]):
-            if o == current and o != 'T':
-                streak += 1
-            else:
-                break
-        
-        st.metric("Streak", f"{current} x{streak}")
-        
-        # SUGESTÃO SEMPRE
-        if streak >= 3:
-            bet = "🔵 PLAYER" if current == 'B' else "🔴 BANK"
-            stake = int(bankroll * 0.01)
-            st.error(f"🚨 **APOSTE {bet}!** R${stake}")
-        elif streak == 2:
-            bet = "🔵 PLAYER" if current == 'B' else "🔴 BANK"
-            st.warning(f"⚠️ Prepare {bet}")
-        else:
-            st.info("⏳ Streak 1 - Aguarde")
-    
-    # Stats compacto
-    p = history.count('P')
-    b = history.count('B')
-    total = p + b
-    col1, col2 = st.columns(2)
-    col1.metric("P%", f"{p/total:.0%}")
-    col2.metric("Total", len(history))
+    st.markdown("### 🚨 **SUGESTÃO**")
+    if s >= 3:
+        bet = "PLAYER 🔵" if c == 'B' else "BANK 🔴"
+        stake = int(bankroll * 0.01)
+        st.error(f"**{bet} R${stake} AGORA**")
+    else:
+        st.info("**Aguarde streak 3+**")
 
-st.caption("Histórico recente ← antigo | Sugestão sempre visível")
+# HISTORICO ESQUERDA→DIREITA RECENTE→ANTIGO
+if h:
+    st.subheader("Histórico ← Recente")
+    hist_rev = list(reversed(h[-8:]))  # Recente esquerda
+    hist_str = " ".join(['🔴B' if x=='B' else '🔵P' if x=='P' else '🟡T' for x in hist_rev])
+    st.markdown(f"**{hist_str}**")
+
+# Stats baixo
+p_win = h.count('P') / (h.count('P') + h.count('B'))
+st.caption(f"P win {p_win:.0%} | {len(h)} rodadas")
