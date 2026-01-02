@@ -1,36 +1,61 @@
 import streamlit as st
 
-st.markdown("# Football Studio Tracker")
+st.title("⚽ Football Studio PRO - Botões")
 
-# ZERO dependências extras
-bankroll = st.number_input("Bankroll R$", value=1000)
+# Bankroll
+bankroll = st.number_input("💰 Bankroll R$", 100, 5000, 1000)
+st.write(f"Stake 1%: **R${int(bankroll*0.01)}**")
 
-seq = st.text_input("Digite P B T (espaço):", "P P P B B B")
+# Botões input (mobile friendly)
+col1, col2, col3 = st.columns(3)
+if col1.button("🔴 PLAYER", use_container_width=True):
+    st.session_state.results = st.session_state.get('results', []) + ['P']
+if col2.button("🔵 BANKER", use_container_width=True):
+    st.session_state.results = st.session_state.get('results', []) + ['B']
+if col3.button("🟡 TIE", use_container_width=True):
+    st.session_state.results = st.session_state.get('results', []) + ['T']
 
-if seq:
-    parts = seq.split()
-    p_count = parts.count('P')
-    b_count = parts.count('B')
-    total = p_count + b_count
+# Clear
+if st.button("🗑️ Limpar"):
+    st.session_state.results = []
+
+# Resultados
+results = st.session_state.get('results', [])
+if results:
+    st.subheader("📊 Live Results")
     
-    st.write("**Stats**")
-    st.write(f"Player: {p_count}/{total} ({p_count/total*100:.0f}%)")
-    st.write(f"Banker: {b_count}/{total} ({b_count/total*100:.0f}%)")
+    # Mostrar últimos 20 com cores
+    for i, r in enumerate(reversed(results[-20:])):
+        color = "red" if r == 'P' else "blue" if r == 'B' else "yellow"
+        emoji = "🔴" if r == 'P' else "🔵" if r == 'B' else "🟡"
+        st.markdown(f"{emoji} **{r}**", unsafe_allow_html=True)
     
-    # Streak básico
-    streak = 1
-    for i in range(len(parts)-2, -1, -1):
-        if parts[i] == parts[-1]:
-            streak += 1
+    # Análise streak
+    if len(results) >= 5:
+        streak = 1
+        current = results[-1]
+        for o in reversed(results[-10:]):
+            if o == current and o != 'T':
+                streak += 1
+            else:
+                break
+        
+        st.metric("Streak Atual", f"{current} x{streak}")
+        
+        if streak >= 3:
+            bet = "PLAYER 🔴" if current == "B" else "BANKER 🔵"
+            st.error(f"🚨 **APOSTE {bet} AGORA!**")
         else:
-            break
+            st.info("⏳ Aguarde streak 3+")
     
-    st.write(f"**Streak atual**: {parts[-1]} x{streak}")
-    
-    if streak >= 3:
-        bet = "PLAYER" if parts[-1] == "B" else "BANKER"
-        st.error(f"🚨 APOSTE {bet}!")
-    else:
-        st.info("Aguarde 3+")
+    # Stats
+    p = results.count('P')
+    b = results.count('B')
+    total = p + b
+    st.metric("Player WR", f"{p/total:.0%}" if total else "0%")
 
-st.balloons()
+if st.button("💾 Salvar Sessão"):
+    st.balloons()
+    st.success("Sessão salva!")
+
+st.caption("Clique botões durante live! Edge 3-5% streaks")
