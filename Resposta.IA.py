@@ -26,11 +26,11 @@ if "profit" not in st.session_state:
 st.title("⚽ Football Studio – PRO ULTIMATE")
 
 c1, c2, c3 = st.columns(3)
-if c1.button("🔴 Início"):
+if c1.button("🔴 Home"):
     st.session_state.history.insert(0, "R")
-if c2.button("🔵 Ausente"):
+if c2.button("🔵 Away"):
     st.session_state.history.insert(0, "B")
-if c3.button("⚪ Desenhe"):
+if c3.button("⚪ Draw"):
     st.session_state.history.insert(0, "D")
 
 st.markdown(f"### 💰 Banca: R$ {st.session_state.bank:.2f}")
@@ -42,16 +42,13 @@ st.markdown(f"### 📈 Lucro: R$ {st.session_state.profit:.2f}")
 st.markdown("## 📊 Histórico (Recente → Antigo)")
 st.write(" ".join(
     ["🔴" if x == "R" else "🔵" if x == "B" else "⚪"
-     for x in st.session_state.history[:30]]
+     for x in st.session_state.history[:50]]
 ))
 
 # =====================================================
-# EXTRAÇÃO UNIVERSAL DE BLOCOS (CORRIGIDO)
+# EXTRAÇÃO UNIVERSAL DE BLOCOS
 # =====================================================
 def extract_blocks(hist):
-    # ❗ IGNORA EMPATE PARA BLOCO
-    hist = [x for x in hist if x != "D"]
-
     if not hist:
         return []
 
@@ -69,8 +66,11 @@ def extract_blocks(hist):
 
     blocks.append({"color": current, "size": size})
 
+    # Classificação flexível e inclusão de empates
     for b in blocks:
-        if b["size"] == 1:
+        if b["color"] == "D":
+            b["type"] = "DRAW"
+        elif b["size"] == 1:
             b["type"] = "CHOPPY"
         elif b["size"] == 2:
             b["type"] = "DUPLO CURTO"
@@ -102,61 +102,66 @@ def update_cycle_memory(blocks):
         mem[:] = mem[-3:]
 
 # =====================================================
-# DETECTOR UNIVERSAL DE PADRÕES (AJUSTADO)
+# DETECTOR UNIVERSAL DE PADRÕES
 # =====================================================
 def detect_patterns(blocks):
     patterns = []
 
-    if len(blocks) < 1:
+    if not blocks:
         return patterns
 
     sizes = [b["size"] for b in blocks]
     colors = [b["color"] for b in blocks]
+    types = [b["type"] for b in blocks]
 
-    if sizes[0] == 1:
+    # CURTOS / DUPLOS / TRIPLOS
+    if types[0] == "CHOPPY":
         patterns.append((colors[0], 55, "CURTO"))
 
-    if len(sizes) >= 2 and sizes[0] == sizes[1] == 1:
+    if len(types) >= 2 and types[0] == types[1] == "CHOPPY":
         patterns.append((colors[0], 58, "DUPLO CURTO"))
 
-    if len(sizes) >= 3 and sizes[0] == sizes[1] == sizes[2] == 1:
+    if len(types) >= 3 and types[0] == types[1] == types[2] == "CHOPPY":
         patterns.append((colors[0], 60, "1x1x1"))
 
-    if sizes[0] >= 4:
-        patterns.append((colors[0], 52, "STREAK"))
+    # STREAKS
+    if types[0] in ["STREAK", "STREAK FORTE"]:
+        score = 52 if types[0] == "STREAK" else 54
+        patterns.append((colors[0], score, types[0]))
 
-    if sizes[0] >= 6:
-        patterns.append((colors[0], 54, "STREAK FORTE"))
-
+    # DECAIMENTO
     if len(sizes) >= 3 and sizes[0] < sizes[1] < sizes[2]:
         patterns.append((colors[0], 57, "DECAIMENTO"))
 
-    # ❗ PADRÃO COMPOSTO SOMENTE SE HOUVER VARIAÇÃO REAL
-    if len(sizes) >= 5 and len(set(sizes[:5])) >= 3:
-        patterns.append(
-            (colors[0], 61, f"PADRÃO COMPOSTO {sizes[:8]}")
-        )
+    # PADRÕES COMPOSTOS (sequências complexas)
+    if len(sizes) >= 5:
+        patterns.append((colors[0], 61, f"PADRÃO COMPOSTO {sizes[:8]}"))
+
+    # EMPATES – Draw Hunting
+    if types[0] == "DRAW":
+        # Score ajustado se longo período sem empate
+        score = 62 if len([b for b in blocks[:20] if b["type"] == "DRAW"]) == 0 else 50
+        patterns.append((colors[0], score, "DRAW"))
 
     return patterns
 
 # =====================================================
-# IA – DECISÃO FINAL (CORRIGIDA)
+# IA – DECISÃO FINAL
 # =====================================================
 def ia_decision(hist):
     blocks = extract_blocks(hist)
     update_cycle_memory(blocks)
 
-    if len(blocks) < 1:
-        return "⏳ AGUARDAR", 0, "SEM BLOCO"
-
     patterns = detect_patterns(blocks)
     if not patterns:
         return "⏳ AGUARDAR", 0, "SEM PADRÃO"
 
+    # Escolhe o padrão com maior score
     color, base_score, pattern = max(patterns, key=lambda x: x[1])
     score = base_score
     mem = st.session_state.cycle_memory
 
+    # CONTEXTO CHOPPY
     if mem.count("CHOPPY") >= 2:
         if "CURTO" in pattern or "1x1x1" in pattern:
             score += 4
@@ -165,14 +170,15 @@ def ia_decision(hist):
         else:
             score -= 3
 
+    # REPETIÇÃO DE CICLO
     if len(mem) == 3 and mem[0] == mem[2]:
         score += 4
 
-    # ❗ EVITA ENTRADA SEM BLOCO DOMINANTE
-    if blocks[0]["size"] == 1 and blocks[1]["size"] == 1 and score < 58:
-        return "⏳ AGUARDAR", score, f"{pattern} | CICLOS {mem}"
-
-    if score >= 55:
+    # DECISÃO DIRETA
+    if score >= 52:
+        # DRAW com probabilidade alta sugere aposta em Draw
+        if "DRAW" in pattern:
+            return f"🎯 APOSTAR ⚪", score, f"{pattern} | CICLOS {mem}"
         return f"🎯 APOSTAR {'🔴' if color == 'R' else '🔵'}", score, f"{pattern} | CICLOS {mem}"
 
     return "⏳ AGUARDAR", score, f"{pattern} | CICLOS {mem}"
