@@ -1,119 +1,209 @@
 import streamlit as st
-from motor import MotorAnalise
+from collections import Counter, deque
 
-# ===============================
-# CONFIG
-# ===============================
-st.set_page_config(layout="wide")
-st.title("⚽ Football Studio – PRO (IA + Motor Central)")
+# =====================================================
+# CONFIG STREAMLIT
+# =====================================================
+st.set_page_config(layout="wide", page_title="Football Studio PRO")
+st.title("⚽ Football Studio PRO – IA Completa")
 
-motor = MotorAnalise()
+# =====================================================
+# MOTOR DE ANÁLISE (COMPLETO)
+# =====================================================
 
-# ===============================
-# ESTADO
-# ===============================
-if "historico" not in st.session_state:
-    st.session_state.historico = []
+class Ciclo:
+    def __init__(self, padrao, bloco, empate):
+        self.padrao = padrao
+        self.bloco = bloco
+        self.empate = empate
 
-if "ultima_sugestao" not in st.session_state:
-    st.session_state.ultima_sugestao = "AGUARDAR"
 
-# ===============================
-# FUNÇÕES
-# ===============================
-def registrar(resultado):
-    st.session_state.historico.append(resultado)
+class MotorAnalise:
+    def __init__(self):
+        self.memoria_ciclos = deque(maxlen=3)
 
-def decidir_ia(padroes, blocos, empate_estado):
+    # -----------------------------
+    # BLOCOS REAIS
+    # -----------------------------
+    def _blocos(self, historico):
+        blocos, atual, cont = [], None, 0
+        for r in historico:
+            if r == atual:
+                cont += 1
+            else:
+                if atual is not None:
+                    blocos.append(cont)
+                atual, cont = r, 1
+        if cont:
+            blocos.append(cont)
+        return blocos
+
+    def _sem_empate(self, historico):
+        return [h for h in historico if h != "E"]
+
+    # -----------------------------
+    # DETECÇÃO DE PADRÕES
+    # -----------------------------
+    def detectar(self, historico):
+        padroes = []
+        blocos = self._blocos(historico)
+        h = self._sem_empate(historico)
+
+        if len(h) < 6:
+            return padroes, blocos
+
+        # 1️⃣ STREAK
+        if blocos and blocos[-1] >= 2:
+            padroes.append(("STREAK", blocos[-1], blocos[-1]*10))
+
+        # 2️⃣ DUPLO CURTO 2x2
+        if len(blocos) >= 2 and blocos[-1] == 2 and blocos[-2] == 2:
+            padroes.append(("DUPLO_CURTO_2x2", 2, 25))
+
+        # 3️⃣ CURTO 1x1x1
+        ult = h[-6:]
+        if ult.count("R") == 3 and ult.count("B") == 3:
+            if all(ult[i] != ult[i-1] for i in range(1,6)):
+                padroes.append(("CURTO_1x1x1", 1, 20))
+
+        # 4️⃣ ZIGZAG
+        if all(ult[i] != ult[i-1] for i in range(1,len(ult))):
+            padroes.append(("ZIGZAG", 1, 30))
+
+        # 5️⃣ CLUSTER
+        if len(blocos) >= 3:
+            media = sum(blocos[-3:]) / 3
+            if 2.5 <= media <= 4.5:
+                padroes.append(("CLUSTER", int(media), 35))
+
+        # 6️⃣ SEQUÊNCIA COMPLEXA
+        if len(blocos) >= 8 and blocos[-8:] == [4,4,3,2,3,2,1,2]:
+            padroes.append(("SEQUENCIA_COMPLEXA", 4, 60))
+
+        # 7️⃣ REVERSÃO ESTATÍSTICA
+        c = Counter(h[-50:])
+        if abs(c["R"] - c["B"]) >= 15:
+            padroes.append(("REVERSAO_MEDIA", abs(c["R"]-c["B"]), 40))
+
+        return padroes, blocos
+
+    # -----------------------------
+    # EMPATE (CORRIGIDO)
+    # -----------------------------
+    def estado_empate(self, historico):
+        sem = 0
+        for r in reversed(historico):
+            if r == "E":
+                break
+            sem += 1
+        if sem >= 45:
+            return "ANCORA"
+        if sem >= 25:
+            return "ATENCAO"
+        return "NEUTRO"
+
+    # -----------------------------
+    # MEMÓRIA 3 CICLOS
+    # -----------------------------
+    def registrar_ciclo(self, padrao, bloco, empate):
+        self.memoria_ciclos.append(Ciclo(padrao, bloco, empate))
+
+    def memoria(self):
+        return list(self.memoria_ciclos)
+
+
+# =====================================================
+# IA DE DECISÃO
+# =====================================================
+
+def decisao_ia(padroes, blocos, estado_empate, memoria):
     score = 0
-    motivo = []
+    motivos = []
 
     if len(padroes) >= 2:
         score += 25
-        motivo.append("Confluência de padrões")
+        motivos.append("Confluência de padrões")
 
-    if blocos and blocos[0] >= 4:
+    if blocos and blocos[-1] >= 4:
         score += 25
-        motivo.append("Bloco forte")
+        motivos.append("Bloco forte")
 
-    if empate_estado == "ANCORA":
+    if estado_empate == "ANCORA":
         score += 10
-        motivo.append("Empate âncora")
+        motivos.append("Empate âncora")
 
-    if len(motor.memoria()) >= 2:
+    if len(memoria) >= 2:
         score += 10
-        motivo.append("Memória ativa")
+        motivos.append("Memória ativa")
 
     if score >= 60:
-        return True, score, motivo
+        return True, score, motivos
 
-    return False, score, motivo
+    return False, score, motivos
 
-# ===============================
-# BOTÕES (CORRIGIDOS)
-# ===============================
+
+# =====================================================
+# APP
+# =====================================================
+
+motor = MotorAnalise()
+
+if "historico" not in st.session_state:
+    st.session_state.historico = []
+
+# -----------------------------
+# BOTÕES (NOMES CORRIGIDOS)
+# -----------------------------
 c1, c2, c3 = st.columns(3)
 
-with c1:
-    if st.button("CASA 🔴"):
-        registrar("R")
+if c1.button("CASA 🔴"):
+    st.session_state.historico.insert(0, "R")
 
-with c2:
-    if st.button("EMPATE ⚪"):
-        registrar("E")
+if c2.button("EMPATE ⚪"):
+    st.session_state.historico.insert(0, "E")
 
-with c3:
-    if st.button("VISITANTE 🔵"):
-        registrar("B")
+if c3.button("VISITANTE 🔵"):
+    st.session_state.historico.insert(0, "B")
 
-# ===============================
+# -----------------------------
 # HISTÓRICO VISUAL
-# ===============================
-st.subheader("📊 Histórico (recente → antigo)")
-cores = {"R":"🔴","B":"🔵","E":"⚪"}
-st.write(" ".join(cores[r] for r in st.session_state.historico))
+# -----------------------------
+st.subheader("📊 Histórico (mais recente → mais antigo)")
+st.write(" ".join({"R":"🔴","B":"🔵","E":"⚪"}[h] for h in st.session_state.historico))
 
-# ===============================
-# ANÁLISE PELO MOTOR
-# ===============================
+# -----------------------------
+# ANÁLISE
+# -----------------------------
 padroes, blocos = motor.detectar(st.session_state.historico)
 estado_empate = motor.estado_empate(st.session_state.historico)
 
-# ===============================
-# IA DECISÃO
-# ===============================
-entrar, score, motivos = decidir_ia(padroes, blocos, estado_empate)
+entrar, score, motivos = decisao_ia(
+    padroes,
+    blocos,
+    estado_empate,
+    motor.memoria()
+)
 
-st.subheader("🎯 DECISÃO DA IA")
+st.subheader("🎯 SUGESTÃO DA IA")
 
 if entrar:
-    st.success(
-        f"ENTRAR ✅\n\n"
-        f"Score: {score}\n"
-        f"Estado do Empate: {estado_empate}\n\n"
-        f"Padrões Detectados:\n" +
-        "\n".join([f"- {p['padrao']} | Janela {p['janela']}" for p in padroes])
-    )
+    st.success(f"✅ ENTRAR | Score {score}")
 else:
-    st.warning(
-        f"AGUARDAR ⏳\n\n"
-        f"Score: {score}\n"
-        f"Estado do Empate: {estado_empate}\n\n"
-        f"Padrões Detectados:\n" +
-        ("\n".join([f"- {p['padrao']} | Janela {p['janela']}" for p in padroes]) if padroes else "Nenhum padrão válido")
-    )
+    st.warning(f"⏳ AGUARDAR | Score {score}")
 
-# ===============================
-# MEMÓRIA DE CICLOS
-# ===============================
+st.write("Estado do empate:", estado_empate)
+
 if padroes:
-    motor.registrar_ciclo(
-        padrao=padroes[0]["padrao"],
-        bloco=padroes[0]["bloco"],
-        lado="INDEFINIDO",
-        empate=estado_empate
-    )
+    st.write("📌 Padrões detectados:")
+    for p in padroes:
+        st.write(f"- {p[0]} | bloco {p[1]} | força {p[2]}")
+    motor.registrar_ciclo(padroes[0][0], padroes[0][1], estado_empate)
+else:
+    st.write("Nenhum padrão válido no momento")
 
+# -----------------------------
+# MEMÓRIA
+# -----------------------------
 with st.expander("🧠 Memória de 3 ciclos"):
     for c in motor.memoria():
         st.write({
@@ -121,134 +211,3 @@ with st.expander("🧠 Memória de 3 ciclos"):
             "Bloco": c.bloco,
             "Empate": c.empate
         })
-
-# ===============================
-# DEBUG (OPCIONAL)
-# ===============================
-with st.expander("🔍 Debug técnico"):
-    st.write("Blocos reais:", blocos)
-    st.write("Padrões brutos:", padroes)
-    # motor.py
-
-from collections import deque
-
-# ===============================
-# MODELOS
-# ===============================
-
-class Padrao:
-    def __init__(self, nome, sequencia):
-        self.nome = nome
-        self.sequencia = sequencia
-
-class Ciclo:
-    def __init__(self, padrao, bloco, lado, empate):
-        self.padrao = padrao
-        self.bloco = bloco
-        self.lado = lado
-        self.empate = empate
-
-# ===============================
-# MOTOR CENTRAL
-# ===============================
-
-class MotorAnalise:
-    def __init__(self):
-        self.ciclos = deque(maxlen=3)
-        self.padroes = self._carregar_padroes()
-
-    # ---------------------------
-    # PADRÕES (CATÁLOGO TOTAL)
-    # ---------------------------
-    def _carregar_padroes(self):
-        return [
-            Padrao("CURTO 1x1", [1,1]),
-            Padrao("CURTO 1x1x1", [1,1,1]),
-            Padrao("DUPLO 2x2", [2,2]),
-            Padrao("DUPLO 2x1x2", [2,1,2]),
-            Padrao("TRIPLO 3", [3]),
-            Padrao("COMPOSTO 3x1x3", [3,1,3]),
-            Padrao("DUPLO LONGO 4x4", [4,4]),
-            Padrao("PADRÃO ATUALIZADO", [4,4,3,2,3,2,1,2]),
-        ]
-
-    # ---------------------------
-    # BLOCOS REAIS
-    # ---------------------------
-    def extrair_blocos(self, historico):
-        blocos = []
-        atual = None
-        cont = 0
-
-        for r in reversed(historico):
-            if r == "E":
-                if cont > 0:
-                    blocos.append(cont)
-                atual = None
-                cont = 0
-                continue
-
-            if r == atual:
-                cont += 1
-            else:
-                if cont > 0:
-                    blocos.append(cont)
-                atual = r
-                cont = 1
-
-        if cont > 0:
-            blocos.append(cont)
-
-        return blocos
-
-    # ---------------------------
-    # JANELAS DESLIZANTES
-    # ---------------------------
-    def gerar_janelas(self, blocos):
-        janelas = []
-        for tamanho in [3,5,7,9,12]:
-            for i in range(len(blocos) - tamanho + 1):
-                janelas.append(blocos[i:i+tamanho])
-        return janelas
-
-    # ---------------------------
-    # EMPATE (ESTADO)
-    # ---------------------------
-    def estado_empate(self, historico):
-        if not historico:
-            return "NEUTRO"
-
-        if historico[-1] == "E":
-            if historico[-2] == "E":
-                return "QUEBRA"
-            return "ANCORA"
-
-        return "NEUTRO"
-
-    # ---------------------------
-    # DETECÇÃO DE PADRÕES
-    # ---------------------------
-    def detectar(self, historico):
-        blocos = self.extrair_blocos(historico)
-        janelas = self.gerar_janelas(blocos)
-        encontrados = []
-
-        for janela in janelas:
-            for p in self.padroes:
-                if janela[:len(p.sequencia)] == p.sequencia:
-                    encontrados.append({
-                        "padrao": p.nome,
-                        "janela": janela,
-                        "bloco": janela[0]
-                    })
-
-        return encontrados, blocos
-
-    # ---------------------------
-    # MEMÓRIA DE 3 CICLOS
-    # ---------------------------
-    def registrar_ciclo(self, padrao, bloco, lado, empate):
-        self.ciclos.append(Ciclo(padrao, bloco, lado, empate))
-
-    def memoria(self):
-        return list(self.ciclos)
